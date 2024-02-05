@@ -1,1 +1,2 @@
-# qomsim
+# Numerical simulations supporting quantum optomechanical oscillator setup
+In progress...
