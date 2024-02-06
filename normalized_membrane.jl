@@ -5,7 +5,7 @@ function classical_membrane(u, p, t)
     x = u[1]
     z = u[2]
 
-    dx = z/Ω₀
+    dx = z*Ω₀
     d2x = -1/Q*z - x
     SA[dx,d2x]
 end
