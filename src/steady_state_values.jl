@@ -1,3 +1,6 @@
+# Script to find steady-state of semiclassical equations (2.28) with our parameters
+using DifferentialEquations, StaticArrays
+
 function mean_posmomlight_steadystate(u,p)
     @views Ω, Γ, κby2, iΔ, sqrt2g₀, sqrtκinαin = p
     @views Q, α = u
@@ -14,7 +17,7 @@ begin
     Γ = Ω / Q_factor
 
     κ = 2*pi*20e6
-    Δ = 0.0
+    Δ = 0
     iΔ = im*Δ
 
     g₀ = 2*pi*100
