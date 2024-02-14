@@ -1,3 +1,4 @@
+# Script for running semiclassical equations (2.28) in a range of Δ
 using DifferentialEquations, StaticArrays, Plots, Statistics, ProgressLogging
 
 # Light + mechanical oscillator
@@ -40,7 +41,6 @@ function α2forΔrange(u₀, tspan,Δt; Δvec = (-3e8:1e7:3e8))
 
     return αmat
 end
-
 
 
 u₀ = @SVector [0.0,0.0, 0.0im];

@@ -1,54 +1,59 @@
-using DifferentialEquations, Plots, StaticArrays, LinearAlgebra
+using DifferentialEquations, Plots, StaticArrays, LinearAlgebra, ProgressLogging, Statistics
 
-function classical_membrane(u, p, t)
-    @views Γ₀, Ω₀2 = p[1:2]
-    @views x,v = u
-    dx = v
-    d2x = - Ω₀2*x  -Γ₀*v
-    SA[dx,d2x]
-end
-
-function nondimensionalized(u,p,t)
-    @views γ = p[1]
-    @views x,v = u
-
-    dx = v
-    d2x = -γ*v - x
-
-    SA[dx,d2x]
-end
-
-# function classical_membrane!(du,u,p,t)
-#     @views Γ₀, Ω₀2 = p[1:2]
-#     @views x, v = u
-
-#     du[1] = v
-#     du[2] = -Γ₀*v - Ω₀2*x
+# function classical_membrane(u, p, t)
+#     @views @inbounds Γ₀, Ω₀2 = p[1:2]
+#     @views x,v = u
+#     dx = v
+#     d2x = - Ω₀2*x  -Γ₀*v
+#     SA[dx,d2x]
 # end
 
-function noise_fun(u,p,t)
-    # return [0; @views p[2]]
-    return [0.0;p[2]]
+function classical_membrane(du, u, p, t)
+    @views @inbounds Γ₀, Ω₀2 = p[1:2]
+    @views x,v = u
+
+    du[1] = v
+    du[2] = - Ω₀2*x  -Γ₀*v
+    nothing
 end
 
-function noise_nondim(u,p,t)
-    # return[0; @views p[2]]
-    return [0.0; p[2]]
+
+# function nondimensionalized(u,p,t)
+#     @views γ = p[1]
+#     @views x,v = u
+
+#     dx = v
+#     d2x = -γ*v - x
+
+#     SA[dx,d2x]
+# end
+
+# function noise_fun(u,p,t)
+#     return [0.0;@views p[3]]
+# end
+
+function noise_fun(du,u,p,t)
+    du[1] = 0.0
+    du[2] = p[3]
 end
+
+
+meanx2(T) = 2*ħ*Ω₀/(kB*T)*sqrt(ħ/(2*m*Ω₀))
+
 
 #Constants and initial conditions
 begin
-    Ω₀ = 2π*40e3;
-    Q = 1e7;
+    Ω₀ = 2π * 1.1e6
+    Q = 1e8 
     Γ₀ = Ω₀ / Q
-    
 
     const kB = 1.380649e-23;
     const m = 12e-9;
-    const T = 5e-3;
-   
+    T = 273#5e-3;
+    const ħ = 1.05457182e-34
 
-    p = (Γ₀, Ω₀^2, sqrt(2*kB*T*m*Γ₀)/m);
+    p = (Γ₀, Ω₀^2, sqrt(2*kB*T*m*Γ₀/xzp)/m);
+    #p = (Γ₀, Ω₀^2,0.0);
     p_nondim = (1/Q,1/sqrt(Ω₀));
 
     u₀ =  [1,0];
@@ -56,24 +61,31 @@ begin
    
     u₀_nondim = SA[0, m*sqrt(Ω₀)/sqrt(2*kB*T*m*Γ₀)]
     #u₀_nondim = SA[m*Ω₀*sqrt(Ω₀)/sqrt(2*kB*T*m*Γ₀),0]
-    tspan = (0,1/Γ₀);
-    τspan = (0,Ω₀/Γ₀);
 end
 
-tspan = (0,10)
+
+
+tspan = (0,1e-3)
 # Without noise (and using StaticArrays)
-prob = ODEProblem(classical_membrane, u₀s, tspan, p);
-@time sol = solve(prob, Tsit5(), saveat = 1e-6, dt = 1e-3, dtmin = 1e-10, dtmax = 1e-6, maxiters = tspan[2]/1e-15);
-#@time sol = solve(prob, VerletLeapfrog(), saveat = 0.01, dt = 1e-3, dtmin = 1e-7, dtmax = 1e-2, maxiters = tspan[2]/1e-15);
-plot(sol.t, sol[1,:], xlabel = "t (s)", ylabel = "x", label = "No Noise", title = "Classical SHO time series", xlims = (0,100e-5), ylims = (-1,1))#, ylims = (-1,1))
-
-
+prob = ODEProblem(classical_membrane, u₀, tspan, p)
+@time sol = solve(prob, Tsit5(), saveat = 1e-8, dt = 1e-9, dtmin = 1e-10, dtmax = 1e-8, maxiters = tspan[2]/1e-12, progress = true);
 
 # Now with NOISE term (Fo * ξ(t)~Normal(0,1))
-probnoise = SDEProblem(classical_membrane, noise_fun, u₀s, tspan,p);
-@time sol_stoch = solve(probnoise, EM(), dt =1e-5, dtmax = 1e-2, dtmin = 1e-7, saveat = 0.01)
-#,
+probnoise = SDEProblem(classical_membrane, noise_fun, u₀, tspan,p)
+@time sol_stoch = solve(probnoise,EulerHeun(), dt = 1e-10, dtmax = 1e-8, saveat = 5e-9, reltol = 1e-8, abstol = 1e-8,progress = true, maxiters = tspan[2]/1e-12)
 
+
+N = size(sol,2)
+N2 = size(sol_stoch,2)
+# myrange = Int(round(N/2))-100000:Int(round(N/2))
+myrange =  1:100000
+# myrange2 = 1:100000
+myrange = N-1000:N
+myrange2 = N2-2000:N2
+plot(sol.t[myrange], sol[1,myrange], xlabel = "t (s)", ylabel = "x", label = "No Noise", title = "Classical SHO time series", ls = :dash)
+plot!(sol_stoch.t[myrange2],sol_stoch[1,myrange2], label = "Noise")
+
+#plot(sol.t[1:1000:end],abs.(sol[1,1:1000:end] .- sol_stoch[1,1:10000:end]))
 
 # Analytical solution
 dt = 1e-4;
@@ -107,7 +119,7 @@ plot(t,xs[:,1], label = "Analytical")
 prob_nondim = ODEProblem(nondimensionalized, u₀_nondim, τspan, p_nondim)
 @time sol_nondim = solve(prob_nondim,Vern9(), saveat = 0.01*Ω₀, dt = 1e-3, dtmin = 1e-5, dtmax = 1e-1)
 # Non-dimensionalized with noise
-prob_nondim_stoch = SDEProblem(nondimensionalized, noise_nondim, u₀_nondim, τspan, p_nondim)
+prob_nondim_stoch = SDEProblem(nondimensionalized, noise, u₀_nondim, τspan, p_nondim)
 @time sol_nondim_stoch = solve(prob_nondim_stoch, EM(), saveat = 0.01*Ω₀, dt = 1e-3)#, dtmin = 1e-7, dtmax = 1e-2)
 
 
