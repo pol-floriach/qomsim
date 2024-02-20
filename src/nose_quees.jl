@@ -1,4 +1,4 @@
-using DifferentialEquations, Plots, StaticArrays, ProgressLogging, Statistics
+using DifferentialEquations, Plots, StaticArrays, LinearAlgebra, ProgressLogging, Statistics
 
 function classical_membrane(u, p, t)
     @views Γ₀, Ω₀2 = p[1:2]
@@ -18,13 +18,7 @@ function back_action(u,p,t)
 end
 
 
-# must use kwarg noise_rate_prototype = zeros(3,2) in SDEProblem(...) for it to work
-function thermal_and_backaction(u,p,t)
-    [0.0 0.0; p[3] p[4]]
-end
-
-
-#Constants (note that we have chosen [x] = fm and [t] = μs! (so))
+#Constants (note that we have chosen [x] = nm and [t] = μs!)
 begin
     Ω₀ = 2π*1.1                         # [Ω₀] = s^(-1)
     Q = 1e7
@@ -32,36 +26,36 @@ begin
 
     kB = 1.380649e-23  * 1e9^2/1e6^2    # [kB] = nm^2 kg  μs^(-2) K^(-1)
     m = 1e-12;                          # [m]  = kg
-    T = 300;                            # [T]  = K
+    T = 0;                            # [T]  = K
     ħ = 1.05457182e-34  * 1e9^2 / 1e6   # [ħ]  = m^2 kg / s
 
     xzpf = sqrt(ħ/(2*m*Ω₀))           
     nth = 1/(exp(ħ*Ω₀/(kB*T)) - 1)
 end
-# Measuring laser's parameters
-begin
-    λ = 1550                
-    c = 3e8 * 1e9 / 1e6
-    P = 1e-3 * 1e9^2 / 1e6^2  # W = J / s = kg * m^2 / s^2  --> 1e9^2 / 
-    Nflux = λ*P/(2π*ħ*c)
-end
+
+
+
+
 # Parameters and initial conditions
 begin
-    p = (Γ₀, Ω₀^2, sqrt(2*kB*T*m*Γ₀)/m, 2*ħ*kB*sqrt(Nflux));
+    p = (Γ₀, Ω₀^2, sqrt(2*kB*T*m*Γ₀)/m, 2*ħ*2π/λ*sqrt(Nflux));
     u₀ =  [xzpf * sqrt(2*nth),0];
     u₀s = SA[u₀...];
 end
 
 
 
-tspan = (0,1e6)
-# Without noise
+tspan = (0,1e3)
+# Without noise (and using StaticArrays)
 prob = ODEProblem(classical_membrane, u₀s, tspan, p)
 @time sol = solve(prob, Tsit5(), saveat = 1e-1, dt = 1e-3, dtmin = 1e-7, dtmax = 1e-2, maxiters = tspan[2]/1e-12, progress = true, reltol = 1e-10, abstol = 1e-10);
 
 # Now with NOISE term (Fo * ξ(t)~Normal(0,1)) 
-probnoise = SDEProblem(classical_membrane, thermal_noise, u₀s, tspan,p)
-@time sol_stoch = solve(probnoise,dt = 1e-4, dtmax = 1e-4, saveat = 1e-2, progress = true, maxiters = tspan[2]/1e-8)
+probnoise = SDEProblem(classical_membrane, back_action, u₀s, tspan,p)
+@time sol_stoch = solve(probnoise,dt = 1e-4, dtmax = 1e-4, saveat = 1e-1, progress = true, maxiters = tspan[2]/1e-8)
+
+plot(sol.t, sol[2,:], xlabel = "t (μs)", ylabel = "x (nm)", label = "w/o noise", ls = :dash);
+plot!(sol_stoch.t, sol_stoch[2,:], label = "w/ Noise", ls = :dashdot)
 
 
 println("Deterministic σₓ = $(std(sol[1,Int(round(end/2)):end])) nm")
@@ -74,8 +68,8 @@ N2 = size(sol_stoch,2)
 
 # myrange = N-100000:N
 # myrange2 = N2-100000:N2
-myrange = 1:100
-myrange2 = 1:100
+myrange = 1:100:N
+myrange2 = 1:100:N2
 plot(sol.t[myrange], sol[2,myrange], xlabel = "t (μs)", ylabel = "x(nm)", label = "No Noise", title = "Classical SHO time series", ls = :dash)
 plot!(sol_stoch.t[myrange2],sol_stoch[2,myrange2], label = "Noise")
 
