@@ -31,16 +31,16 @@ rates = [γ0*(n+1),γ0*n]
 
 # Initial conditions
 Ψ0 = fockstate(b_mech,0)
-tspan = collect(0:100:1e7)
+tspan = collect(0:1000:1e7)
 dt = 0.1
-@time tout, ρt = timeevolution.master(tspan,Ψ0, H_mech, J; dt = dt, rates = rates);
+@time tout, ρt = timeevolution.master(tspan,Ψ0, H_mech, J; dt = dt, rates = rates, progress= true);
 
-plot(tspan,real(expect(bt*b,ρt)),
+plot!(tspan,real(expect(bt*b,ρt)),
     title = "Mechanical oscillator",
     xlabel = L"t [\mu s]",
     ylabel = L"\langle n_m \rangle",
-    legend = false,
-    lc = 2,
+    #legend = false,
+    #lc = 2,
     dpi = 1400
 )
 
