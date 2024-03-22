@@ -1,5 +1,56 @@
 using DifferentialEquations, LinearAlgebra
 
+
+function anihilation(n)
+    a = zeros(n,n)
+    for i in 1:n-1
+        a[i,i+1] = sqrt(i)
+    end
+    return a
+end
+
+function creation(n)
+    at = zeros(n,n)
+    for i in 1:n-1
+        at[i+1,i] = sqrt(i)
+    end
+    return at
+end
+
+function solve_master(tspan,ρ0, H, J;
+                        rates = nothing,
+                        Jdagger = adjoint.(J),
+                        kwargs...)
+    tmp = copy(ρ0)
+    dmaster_(t,ρ,dρ) = dmaster_h!(dρ,H,J,Jdagger,rates,ρ,tmp)
+    integrate_master(tspan,dmaster_, ρ0; kwargs...)
+end
+
+
+function dmaster_h!(drho::Matrix, H, J, Jdagger, rates, rho::Matrix, drho_cache)
+    mul!(drho,H,rho,-eltype(rho)(im),zero(eltype(rho)))
+    mul!(drho,rho,H,eltype(rho)(im),one(eltype(rho)))
+    for i in eachindex(J)
+        mul!(drho_cache,J[i],rho,eltype(rho)(rates[i]),zero(eltype(rho)))
+        mul!(drho,drho_cache,Jdagger[i],true,true)
+
+        mul!(drho,Jdagger[i],drho_cache,eltype(rho)(-0.5),one(eltype(rho)))
+
+        mul!(drho_cache,rho,Jdagger[i],eltype(rho)(rates[i]),zero(eltype(rho)))
+        mul!(drho,drho_cache,J[i],eltype(rho)(-0.5),one(eltype(rho)))
+    end
+    return drho
+end
+
+function integrate_master(tspan,df, u0; alg = Tsit5(), kwargs...)
+    prob = ODEProblem(df,u0, tspan)
+    sol = solve(prob, alg; 
+        reltol = 1.0e-6, abstol = 1.0e-8,
+        save_everystep = false
+    )
+    return sol.t, sol.u
+end
+
 # Parameters
 ω_mech = 2π*1.1
 Q = 1e7
@@ -25,37 +76,6 @@ rates = [γ₀*(n+1),γ₀*n]
 
 ρ0 = zeros(ComplexF64,n,n); ρ0[1] = 1.0
 
+tspan = (0,1000)
 
-function solve_master!(tspam,ρ0, H, J, rates; kwargs...)
-    
-    tmp = copy(ρ0)
-    dmaster_(t,ρ,dρ) = dmaster_!(dρ,H,J,Jdagger,rates,ρ,tmp)
-    integrate_master!(tspan,dmaster_, ρ0; kwargs...)
-end
-
-
-function dmaster_h!(drho, H, J, Jdagger, rates, rho, drho_cache)
-    mul!(drho,H,rho,-eltype(rho)(im),zero(eltype(rho)))
-    mul!(drho,rho,H,eltype(rho)(im),one(eltype(rho)))
-    for i in eachindex(J)
-        mul!(drho_cache,J[i],rho,eltype(rho)(rates[i]),zero(eltype(rho)))
-        mul!(drho,drho_cache,Jdagger[i],true,true)
-
-        mul!(drho,Jdagger[i],drho_cache,eltype(rho)(-0.5),one(eltype(rho)))
-
-        mul!(drho_cache,rho,Jdagger[i],eltype(rho)(rates[i]),zero(eltype(rho)))
-        mul!(drho,drho_cache,J[i],eltype(rho)(-0.5),one(eltype(rho)))
-    end
-    return drho
-end
-
-
-function integrate_master!(tspan,df, u0, state, dstate; alg = Tsit5(), kwargs...)
-
-    prob = ODEProblem(df,u0, tspan)
-    sol = solve(prob, alg; 
-        reltol = 1.0e-6, abstol = 1.0e-8,
-        save_everystep = false
-    )
-    return sol
-end
+tvec, ρt = solve_master(tspan, ρ0, H,J; rates = rates)
