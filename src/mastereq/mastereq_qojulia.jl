@@ -14,7 +14,7 @@ T = 1e-3
 n = 1/(exp(ħ*ω_mech/(kB*T))-1)
 
 # Hilbert space
-b_mech = FockBasis(100)
+b_mech = FockBasis(50)
 
 # Operators
 b = destroy(b_mech)
@@ -33,7 +33,7 @@ xzpf = sqrt(ħ/(2*m*ω_mech))
 nth = 1/(exp(ħ*ω_mech/(kB*T))-1)
 
 k = γ0 * nth #/ xzpf^2
-
+k = 2*k
 x = b+bt
 
 
@@ -54,13 +54,13 @@ rates2 = [k]
 
 using LinearAlgebra
 BLAS.set_num_threads(1)
-tspan = collect(0:1e3:1e6)
+tspan = collect(0:1e4:1e7)
 dt = 0.1
 @time tout, ρt = timeevolution.master(tspan,ρ0, H_mech, J; dt = dt, rates = rates, progress= true);
 @time tout2, ρt2 = timeevolution.master(tspan,ρ0, H_mech, J2; dt = dt, rates = rates2, progress= true);
 
 
-plot(tspan,real(expect(bt*b,ρt)),
+plot!(tspan,real(expect(bt*b,ρt)),
     title = "Mechanical oscillator",
     xlabel = L"t [\mu s]",
     ylabel = L"\langle n_m \rangle",
@@ -79,9 +79,8 @@ plot(tspan,real(expect(bt*b,ρt)),
 # Solucio analitica (potser)
 
 
-
 Nop = Diagonal(Matrix(N.data))
-G = 2*nth*sinh.(γ0/2*tspan) ./ (cosh.(γ0/2*tspan) + (1+2*nth)*sinh.(γ0/2*tspan))
+G = 2*n*sinh.(γ0/2*tspan) ./ (cosh.(γ0/2*tspan) + (1+2*n)*sinh.(γ0/2*tspan))
 G = G[2:end]
 
 ρex = [(1 .- G[i])*exp(log.(G[i])*Nop) for i in eachindex(G)]
@@ -91,11 +90,9 @@ expected_n = [real(tr(ρex[i]*Nop)) for i in eachindex(G)]
 
 
 plot!(tspan[2:10:end], expected_n[1:10:end],
-    label = "Analytical",
+    label = "Analytical, N = 100",
     dpi = 1400,
 )
-
-
 
 
 # # Stochastic master eqn.

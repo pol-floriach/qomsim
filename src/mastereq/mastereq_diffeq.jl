@@ -99,10 +99,8 @@ H = Diagonal(ω_mech*at*a)
 # H_nh = Diagonal(H - im*ħ/2* (γ₀*(n+1)*at*a + γ₀*n*a*at))
 # H_nh_dagger = Diagonal(adjoint(H_nh))
 
-
-
 x = a+at
-k = γ₀*n
+k = γ₀*n; k = 2*k
 
 # Initial condition (ground state)
 
