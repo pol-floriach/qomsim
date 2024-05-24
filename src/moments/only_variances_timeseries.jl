@@ -33,8 +33,9 @@ end
 Q = 1e7
 γ0 = ω / Q
 
-k = 2
+k = 0.01207
 η = 0.9
+
 
 # Constants
 ħ = 1.05457182e-34 * 1e9^2 / 1e6
@@ -46,7 +47,7 @@ Vx_th = Vp_th = nth + 0.5
 # Initial conditions and SDE parameters
 p = (γ0, ω, k, η)
 u0 = SA[Vx_th, Vp_th, 0.0]
-tspan = (0.0, 10) # μs
+tspan = (0.0, 500) # μs
 
 prob= ODEProblem(covariances_evolution, u0, tspan, p)
 @time sol = solve(prob,
@@ -59,25 +60,9 @@ prob= ODEProblem(covariances_evolution, u0, tspan, p)
     progress = true
 );
 
-#plot(sol.t, sol[3,:])
-# Data visualization
-# xlabels = [L"\langle x \rangle", L"\langle p \rangle", L"V_x", L"V_p", L"C_{xp}"];
-# xlabels = [L"V_x", L"V_p"];
-# myplot2 = [plot(sol.t, (sol[i,:]), ylabel = xlabels[i]) for i in 1:2];
-# plot(myplot2..., 
-#     layout = (2,1),
-#     dpi = 1400, 
-#     legend = false, 
-#     #yscale = :log10,
-#     #plot_title = "Moments time evolution, \n with thermal initial state",
-#     #size = (600,700),
-# )
+
 # pmeans = plot(sol.t, sol[1,:], label = L"\langle x \rangle", xlabel = "t [μs]", ylabel = "Mean")
 # plot!(sol.t, sol[2,:], label = L"\langle p \rangle")
 
 pvars = plot(sol.t, sol[1,:], label = L"V_x", xlabel = "t [μs]", ylabel = "Covariance")
-plot!(sol.t, sol[2,:], label = L"V_p")
-plot!(sol.t, sol[3,:], label = L"C_{xp}")
-
-
-# plot(pmeans, pvars, layout = (2,1))
+plot!(sol.t, sol[2,:], label = L"V_p", legend = :outertopright, size = (800,400))
