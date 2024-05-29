@@ -1,8 +1,8 @@
-# Script for time evolution of the moments and variances (SDE system)
+# Script for time evolution of the moments and variances (SDE system) with feedback
 using DifferentialEquations, StaticArrays, Plots, LaTeXStrings, ProgressLogging
 
 # Moment time evolution (deterministic part)
-function moments_evolution(u,p,t)
+function moments_evolution(u,p,h,t)
     @views γ0, ω, k, η = p
     @views x, p, Vx, Vp, Cxp = u
     dx    = -γ0/2*x + ω*p
@@ -19,10 +19,12 @@ function moments_infogain(u,p,t)
     sqrt(8*k*η)*SA[Vx, Cxp, 0, 0, 0]
 end
 
+
 # Parameters
 ω = 2π*1.1
 Q = 1e7
 γ0 = ω / Q
+
 
 # Measurement "rate"
 g0 = 2π*465

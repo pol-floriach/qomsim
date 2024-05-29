@@ -1,22 +1,5 @@
+# Script for time evolution of variances only
 using DifferentialEquations, StaticArrays, Plots, LaTeXStrings, ProgressLogging
-
-# Moment time evolution (deterministic part)
-function moments_evolution(u,p,t)
-    @views γ0, ω, k, η = p
-    @views x, p, Vx, Vp, Cxp = u
-    dx    = -γ0/2*x + ω*p
-    dp    = -γ0/2*p - ω*x
-    dVx   = -γ0*Vx + 2*ω*Cxp - 8*k*η*Vx^2  + γ0*(nth+0.5)
-    dVp   = -γ0*Vp - 2*ω*Cxp - 8*k*η*Cxp^2 + γ0*(nth+0.5) +2*k
-    dCxp  = ω*Vp - ω*Vx - γ0*Cxp - 8*k*η*Vx*Cxp
-    SA[dx, dp, dVx, dVp, dCxp]
-end
-
-function moments_infogain(u,p,t)
-     k, η = @view p[3:4]
-     Vx, Cxp = @view u[3:2:5]
-    sqrt(8*k*η)*SA[Vx, Cxp, 0, 0, 0]
-end
 
 function covariances_evolution(u,p,t)
     γ0, ω, k, η = p
@@ -59,7 +42,6 @@ prob= ODEProblem(covariances_evolution, u0, tspan, p)
     maxiters = tspan[2]*1e3,
     progress = true
 );
-
 
 # pmeans = plot(sol.t, sol[1,:], label = L"\langle x \rangle", xlabel = "t [μs]", ylabel = "Mean")
 # plot!(sol.t, sol[2,:], label = L"\langle p \rangle")
