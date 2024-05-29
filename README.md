@@ -1,2 +1,2 @@
-# Numerical simulations supporting quantum optomechanical oscillator setup
+# Numerical simulations for my tfg
 In progress...
