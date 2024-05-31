@@ -36,12 +36,12 @@ g = g0*sqrt(ncav)
 Γqba = 4*g^2/κ /1e6
 k = Γqba/2
 η = 0.9
-G = 1
+G = 0
 
 # Constants
 const ħ = 1.05457182e-34 * 1e9^2 / 1e6
 const kB = 1.380649e-23 * 1e9^2 / 1e6^2
-T = 0
+T = 300
 const nth = 1/(exp(ħ*ω/(kB*T))-1)
 Vx_th = Vp_th = nth + 0.5
 
@@ -52,24 +52,26 @@ lags = [t0]
 # Initial conditions and SDE parameters
 p = (γ0, ω, k, η, G, t0)
 u0 = [0, 0, Vx_th, Vp_th, 0.0]
-tspan = (0.0, 1000) # μs
+tspan = (0.0, 100) # μs
 
 # Simulation
 prob= SDDEProblem(moments_evolution, moments_infogain, u0, h, tspan, p)#; constant_lags = lags)
 @time sol = solve(prob,
     SOSRI(),
-    saveat = 0.1/ω,
+    saveat = 0.01/ω,
     # dtmin = 1e-4,
     # dtmax = 0.01,
-    dt = 1e-1,
+    dt = 1e-4,
     maxiters = tspan[2]*1e7,
     progress = true
 );
 
-pvars = plot(sol.t, sol[1,:], label = L"\langle x \rangle", xlabel = "t [μs]", ylabel = "Nondimensional")
+pmeans = plot!(sol.t, sol[1,:], label = L"\langle x \rangle", xlabel = "t [μs]", ylabel = "Nondimensional")
 plot!(sol.t, sol[2,:], label = L"\langle p \rangle", title = "Feedback = -G· "*L"\langle x(t-T/4) \rangle")
 
 
+pvars = scatter(sol.t, sol[3,:], label = L"V_x", xlabel = "t [μs]", ylabel = "Nondimensional")
+plot!(sol.t, sol[3,:], label = L"V_p")
 
 # # Provar de fer ensemble problem
 # ensembleprob = EnsembleProblem(prob)
