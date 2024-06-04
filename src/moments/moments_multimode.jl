@@ -1,6 +1,6 @@
 using DifferentialEquations, Plots, LaTeXStrings
 
-# Function to get matrix stored in an array in column-major order
+# Function to get matrix stored in an array in column-major order (for 6x6 matrix)
 getindex(row, col) = row + (col-1)*6
 # Kronecker delta function for better legibility
 δ(x,y) = ==(x,y)
@@ -45,7 +45,15 @@ function moments_infogain(u,p,t)
 end
 
 function infogain_3modes(du,u,p,t)
-
+    
+    Xs = @view u[1:2:5]
+    Ys = @view u[2:2:6]
+    C = @view u[7:end]
+    
+    du[1:2:5,1] = [sum([sqrt(Γmeas[j])*C[getindex(Xi,2*(j-1)+1)] for j in 1:3]) for Xi in 1:2:5] # dWx in d<Xi>
+    du[1:2:5,2] = [sum([sqrt(Γmeas[j])*C[getindex(Xi,2*j)]       for j in 1:3]) for Xi in 1:2:5] # dWy in d<Xi>
+    du[2:2:6,1] = [sum([sqrt(Γmeas[j])*C[getindex(Yi,2*(j-1)+1)] for j in 1:3]) for Yi in 2:2:6] # dWx in d<Yi>
+    du[2:2:6,2] = [sum([sqrt(Γmeas[j])*C[getindex(Yi,2*j)]       for j in 1:3]) for Yi in 2:2:6] # dWy in d<Yi>
 end
 
 
