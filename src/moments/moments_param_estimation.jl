@@ -45,34 +45,38 @@ Vx_th = Vp_th = nth + 0.5
 # Initial conditions and SDE parameters
 p = (γ0, ω, k, η)
 u0 = SA[0, 0, Vx_th, Vp_th, 0.0]
-tspan = (0.0, 100) # μs
+tspan = (0.0, 70) # μs
 prob= SDEProblem(moments_evolution, moments_infogain, u0, tspan, p)
+
+u0 = SA[1.0, 0.0, Vx_th, Vp_th, 0.0]
+prob= ODEProblem(moments_evolution, u0, tspan, p)
 
 
 # Generating synthetic Data with the parameters above
 using RecursiveArrayTools
-t = collect(tspan[1]:0.005/ω:tspan[2])
+t = collect(tspan[1]:0.01/ω:tspan[2])
 function generate_data(t)
-    sol = solve(prob, SOSRI(),
-    saveat = 0.005/ω,
+    sol = solve(prob, Tsit5(),
+    saveat = 0.1/ω,
     dt = 1e-2,
     dtmax = 0.1/ω,
-    maxiters = tspan[2]*1e7,)
-    randomized = VectorOfArray([(sol(t[i]) +0*randn(5)) for i in eachindex(t)])
-    data = convert(Array, randomized)
+    maxiters = tspan[2]*1e7,
+    save_idxs = 1)
+    randomized = sol.u + 0.0*randn(size(sol))
 end
 
-aggregate_data = convert(Array, VectorOfArray([generate_data(t) for i in 1:100]))
+aggregate_data = convert(Array, VectorOfArray([generate_data(t) for _ in 1:100]))
 
 # PARAMETER ESTIMATION
 
 monte_prob = EnsembleProblem(prob)
 # Optimize
-obj = build_loss_objective(monte_prob, SOSRI(), 
-                           L2Loss(t, aggregate_data, differ_weight = 0.5, data_weight = 0.7),
+obj = build_loss_objective(monte_prob, Tsit5(), 
+                           L2Loss(t, aggregate_data, differ_weight = 1, data_weight = 0.5),
                            AutoForwardDiff(),
-                           verbose = false, trajectories = 100, maxiters = 1e5)
-optprob = OptimizationProblem(obj, collect(p), lb = [0.0, 0.0, 0.0, 0.5], ub = [1e-5, 15, 1e-2, 1])
+                           verbose = false, trajectories = 1000, maxiters = 1e5, save_idxs = 1)
+optprob = OptimizationProblem(obj, collect(p), lb = [0.0, 0.0, -0.1, -0.3], ub = [1e-5, 15, 1e-1, 1])
 
-result = solve(optprob, LBFGS())
+result = solve(optprob, BFGS())
 result.original
+
