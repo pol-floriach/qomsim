@@ -1,7 +1,8 @@
+# Script for time evolution of the moments and variances (SDE system) including 3 modes.TODO: test steady state
 using DifferentialEquations, Plots, LaTeXStrings
 
-# Function to get matrix stored in an array in column-major order (for 6x6 matrix)
-getindex(row, col) = row + (col-1)*6
+# Function to get index of a matrix stored in an array in column-major order (for 6x6 matrix)
+colmaj(row, col) = row + (col-1)*6
 # Kronecker delta function for better legibility
 δ(x,y) = ==(x,y)
 # Time evolution w/o information gain TODO: canviar parametres als que toca
@@ -29,10 +30,10 @@ function moments_evolution_3modes(du, u, p, t)
             Mconji = M == 1 ?  2*i : 2*(i-1)+1
             Nconjj = N == 1 ?  2*j : 2*(j-1)+1
 
-            dC[getindex(Mi, Nj)] = - (γ0[i]+γ0[j])/2 * C[getindex(Mi,Nj)] + δ(Mi,Nj)*γ0*(nth+0.5) + δ(M,N)*sqrt(Γba[i]*Γba[j]) 
-                     + (-1)^δ(M,2)*(ω[i] - ωm)*C[getindex(Mconji, Nj)] + (-1)^δ(N,2)*(ω[j] - ωm)*C[getindex(Mi, Nconjj)] 
-                     -4*(sum([sqrt(Γmeas[k])*C[getindex(Mi, 2*k)] for k in 1:3]))*(sum([sqrt(Γmeas[l])*C[getindex(Nj, 2*k)] for Xl in 1:3]))
-                     -4*(sum([sqrt(Γmeas[k])*C[getindex(Mi, 2*(k-1)+1)] for k in 1:3]))*(sum([sqrt(Γmeas[l])*C[getindex(Nj, 2*(k-1)+1)] for Yl in 1:3]))
+            dC[colmaj(Mi, Nj)] = - (γ0[i]+γ0[j])/2 * C[colmaj(Mi,Nj)] + δ(Mi,Nj)*γ0*(nth+0.5) + δ(M,N)*sqrt(Γba[i]*Γba[j]) 
+                     + (-1)^δ(M,2)*(ω[i] - ωm)*C[colmaj(Mconji, Nj)] + (-1)^δ(N,2)*(ω[j] - ωm)*C[colmaj(Mi, Nconjj)] 
+                     -4*(sum([sqrt(Γmeas[k])*C[colmaj(Mi, 2*k)] for k in 1:3]))*(sum([sqrt(Γmeas[l])*C[colmaj(Nj, 2*k)] for Xl in 1:3]))
+                     -4*(sum([sqrt(Γmeas[k])*C[colmaj(Mi, 2*(k-1)+1)] for k in 1:3]))*(sum([sqrt(Γmeas[l])*C[colmaj(Nj, 2*(k-1)+1)] for Yl in 1:3]))
         end
     end
     nothing
@@ -45,15 +46,15 @@ function moments_infogain(u,p,t)
 end
 
 function infogain_3modes(du,u,p,t)
-    
+
     Xs = @view u[1:2:5]
     Ys = @view u[2:2:6]
     C = @view u[7:end]
     
-    du[1:2:5,1] = [sum([sqrt(Γmeas[j])*C[getindex(Xi,2*(j-1)+1)] for j in 1:3]) for Xi in 1:2:5] # dWx in d<Xi>
-    du[1:2:5,2] = [sum([sqrt(Γmeas[j])*C[getindex(Xi,2*j)]       for j in 1:3]) for Xi in 1:2:5] # dWy in d<Xi>
-    du[2:2:6,1] = [sum([sqrt(Γmeas[j])*C[getindex(Yi,2*(j-1)+1)] for j in 1:3]) for Yi in 2:2:6] # dWx in d<Yi>
-    du[2:2:6,2] = [sum([sqrt(Γmeas[j])*C[getindex(Yi,2*j)]       for j in 1:3]) for Yi in 2:2:6] # dWy in d<Yi>
+    du[1:2:5,1] = [sum([sqrt(Γmeas[j])*C[colmaj(Xi,2*(j-1)+1)] for j in 1:3]) for Xi in 1:2:5] # dWx in d<Xi>
+    du[1:2:5,2] = [sum([sqrt(Γmeas[j])*C[colmaj(Xi,2*j)]       for j in 1:3]) for Xi in 1:2:5] # dWy in d<Xi>
+    du[2:2:6,1] = [sum([sqrt(Γmeas[j])*C[colmaj(Yi,2*(j-1)+1)] for j in 1:3]) for Yi in 2:2:6] # dWx in d<Yi>
+    du[2:2:6,2] = [sum([sqrt(Γmeas[j])*C[colmaj(Yi,2*j)]       for j in 1:3]) for Yi in 2:2:6] # dWy in d<Yi>
 end
 
 
