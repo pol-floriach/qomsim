@@ -39,8 +39,8 @@ function moments_evolution_3modes(du, u, p, t)
 
             dC[colmaj(Mi, Nj)] = - (γ0[i]+γ0[j])/2 * C[colmaj(Mi,Nj)] + δ(Mi,Nj)*γ0[i]*(nth+0.5) + δ(M,N)*sqrt(Γba[i]*Γba[j]) +
                      + (-1)^δ(M,2)*(ωs[i] - ωm)*C[colmaj(Mconji, Nj)] + (-1)^δ(N,2)*(ωs[j] - ωm)*C[colmaj(Mi, Nconjj)] +
-                     -4*(sum([sqrt(Γmeas[k])*C[colmaj(Mi, 2k)] for k in 1:3]))*(sum([sqrt(Γmeas[l])*C[colmaj(Nj, 2l)] for l in 1:3])) +
-                     -4*(sum([sqrt(Γmeas[k])*C[colmaj(Mi, 2k-1+1)] for k in 1:3]))*(sum([sqrt(Γmeas[l])*C[colmaj(Nj, 2l-1)] for l in 1:3]))
+                     -4*(sum([sqrt(Γmeas[k])*C[colmaj(Mi, 2k-1)] for k in 1:3]))*(sum([sqrt(Γmeas[l])*C[colmaj(Nj, 2l-1)] for l in 1:3])) +
+                     -4*(sum([sqrt(Γmeas[k])*C[colmaj(Mi, 2k)] for k in 1:3]))*(sum([sqrt(Γmeas[l])*C[colmaj(Nj, 2l)] for l in 1:3]))
         end
     end
     nothing
@@ -86,9 +86,9 @@ Vx_th = Vp_th = nth + 0.5
 # Initial conditions and SDE parameters TODO: Change initial conditions to correct size
 p = (γ0, ωm, ωs, Γba_vec ,Γmeas_vec)
 
-u0 = randn(42)
+u0 = vcat(zeros(6), vec(sol_ss))
 
-tspan = (0.0, 10) # μs
+tspan = (0.0, 1000) # μs
 
 prob= SDEProblem(moments_evolution, moments_infogain, u0, tspan, p)
 @time sol = solve(prob,
@@ -100,6 +100,25 @@ prob= SDEProblem(moments_evolution, moments_infogain, u0, tspan, p)
     save_idxs = 1
 );
 
+prob= ODEProblem(moments_evolution_3modes, u0, tspan, p)
+@time sol = solve(prob,
+    Tsit5(),
+    saveat = 0.1/ωm,
+    dt = 1e-1,
+    maxiters = tspan[2]*1e7,
+    progress = true,
+);
+
 # Data visualization
 pvars = plot(sol.t, sol[1,:], label = L"\langle x \rangle", xlabel = "t [μs]", ylabel = "Nondimensional")
 plot!(sol.t, sol[2,:], label = L"\langle p \rangle")
+
+
+# Plotting time evolution of the variances (of the mode we aim to study, x1)
+
+pcovs = plot(sol.t, sol[7,:], label = L"C_{X1X1}")
+plot!(sol.t, sol[8,:], label = L"C_{X1Y1}")
+`plot!(sol.t, sol[9,:], label = L"C_{X1X2}")
+plot!(sol.t, sol[10,:], label = L"C_{X1Y2}")
+plot!(sol.t, sol[11,:], label = L"C_{X1X3}")
+plot!(sol.t, sol[12,:], label = L"C_{X1Y3}")
