@@ -3,10 +3,18 @@ using StochasticDelayDiffEq, StaticArrays, Plots, LaTeXStrings, ProgressLogging
 
 # Moments time evolution (deterministic part) with feedback term in Hamiltonian: H_fb(t) = -G⋅⟨x(t-T/4)⟩x(t)
 function moments_evolution(u,h,p,t)
-    @views γ0, ω, k, η, G, t0 = p
+    @views γ0, ω, k, η, G, t0, cosa_a_sumar = p
     @views x, p, Vx, Vp, Cxp = u
+
+    for i in 1:10
+        cosa_a_sumar += h(p,t-i*t0)[1]
+    end
+
     dx    = -γ0/2*x + ω*p
-    dp    = -γ0/2*p - ω*x + G*h(p,t-t0)[1]
+    # dp    = -γ0/2*p - ω*x + G*h(p,t-t0)[1]
+    
+    dp    = -γ0/2*p - ω*x + G*cosa_a_sumar/5
+
     dVx   = -γ0*Vx + 2*ω*Cxp - 8*k*η*Vx^2  + γ0*(nth+0.5)
     dVp   = -γ0*Vp - 2*ω*Cxp - 8*k*η*Cxp^2 + γ0*(nth+0.5) +2*k
     dCxp  = ω*Vp - ω*Vx - γ0*Cxp - 8*k*η*Vx*Cxp
@@ -50,9 +58,9 @@ h(p,t) = @SVector zeros(5)
 lags = [t0]
 
 # Initial conditions and SDE parameters
-p = (γ0, ω, k, η, G, t0)
+p = (γ0, ω, k, η, G, t0, 0)
 u0 = [0, 0, Vx_th, Vp_th, 0.0]
-tspan = (0.0, 100) # μs
+tspan = (0.0, 10) # μs
 
 # Simulation
 prob= SDDEProblem(moments_evolution, moments_infogain, u0, h, tspan, p)#; constant_lags = lags)

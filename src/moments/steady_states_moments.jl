@@ -12,7 +12,7 @@ end
 # Parameters 
 m = 1e-12   # [m] = kg
 ω = 2π*1.1  # [ω] = MHz
-Q = 1e9
+Q = 1e7
 γ0 = ω / Q  # [γ0] = MHz
 
 
