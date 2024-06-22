@@ -79,12 +79,18 @@ function affect!(int)
     F_fb_hp = apply_iir_filter(meas_buffer[1+Ndelay_hp:Ndelay_hp+Nfilterhp], u_buffer_hp[1:Nfilterhp-1], coeffs_hp[1:Nfilterhp], coeffs_hp[Nfilterhp+1:end])
     
     # F_fb_bp = bandpass_demodulating(modulated_meas_buffer[1+Ndelay_bp:Ndelay_bp+Nfilter1], u_buffer_bp_mod[1:Nfilter1-1], ωmid*(int.t-tau), coeffs_bp[1:Nfilter1], coeffs_bp[Nfilter1+1:end], F_fbvec_mod)
-    push!(F_fbvec, 0.5*F_fb_lp + 1*F_fb_bp + 0.5*F_fb_hp)
+    push!(F_fbvec, 0.5*F_fb_lp + 1.5*F_fb_bp + 0.5*F_fb_hp)
 
     shift_push!(u_buffer_lp, F_fb_lp)
     shift_push!(u_buffer_bp, F_fb_bp)
     shift_push!(u_buffer_hp, F_fb_hp)
 end
+
+function energy(sol)
+    return 1/2 * (sol[1:2:5,:].^2 + sol[2:2:6,:].^2)
+end
+
+
 
 
 # System parameters
@@ -171,7 +177,7 @@ begin
     u0 = vcat(zeros(6), vec(C0));
 end
 
-tspan = (0.0, 50) # μs
+tspan = (0.0, 200) # μs
 
 measuring_times = collect(0:tsamp:tspan[2])
 cb = PresetTimeCallback(measuring_times, affect!)
@@ -203,10 +209,6 @@ plot!(sol.t[:], sol[3,:], label = L"\langle x_2 \rangle")
 plot!(sol.t[:], sol[5,:], label = L"\langle x_3 \rangle")
 # plot!(sol.t[:], sol[6,:], label = L"\langle p_3 \rangle")
 
-plot!(measuring_times, F_fbvec_low[2:end], label = "Filter lp", xlabel = "t [μs]", ylabel = "Nondimensional")
-plot!(measuring_times, F_fbvec_high[2:end], label = "Filter hp", xlabel = "t [μs]", ylabel = "Nondimensional")
-plot!(measuring_times, F_fbvec_band[2:end], label = "Filter bp", xlabel = "t [μs]", ylabel = "Nondimensional")
-
 # Plotting time evolution of the variances (of the mode we aim to study, x1)
 # pcovs = plot(sol.t, sol[7,:], label = L"V_{x_1}")
 # plot!(sol.t, sol[8,:], label = L"C_{x_1p_1}")
@@ -220,6 +222,16 @@ plot!(measuring_times, F_fbvec_band[2:end], label = "Filter bp", xlabel = "t [μ
 # plot!(sol.t, sol[16,:], label = L"C_{p_1p_2}", ls = :dash)
 # plot!(sol.t, sol[17,:], label = L"C_{p_1x_3}", ls = :dash)
 # plot!(sol.t, sol[18,:], label = L"C_{p_1p_3}", ls = :dash, xlabel = "t, μs", ylabel = "Covariances, adimensional")
+
+
+
+Es = energy(sol)
+Es_ratio1 = Es / (3/2)
+
+es = plot!(sol.t[2:end], Es_ratio1[1,2:end], label = L"E_1")
+plot!(sol.t[2:end], Es_ratio1[2,2:end], label = L"E_2")
+plot!(sol.t[2:end], Es_ratio1[3,2:end], label = L"E_3", yscale = :log10, xlabel = "t [μs]", ylabel = "Energy ratio", dpi = 500)
+
 
 
 

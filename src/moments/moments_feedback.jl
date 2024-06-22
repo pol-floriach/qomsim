@@ -36,7 +36,7 @@ function affect!(int)
     F_fb_hp = apply_iir_filter(meas_buffer[1+Ndelay_hp:Ndelay_hp+Nfilterhp], u_buffer_hp[1:Nfilterhp-1], coeffs_hp[1:Nfilterhp], coeffs_hp[Nfilterhp+1:end])
     
     # F_fb_bp = bandpass_demodulating(modulated_meas_buffer[1+Ndelay_bp:Ndelay_bp+Nfilter1], u_buffer_bp_mod[1:Nfilter1-1], ωmid*(int.t-tau), coeffs_bp[1:Nfilter1], coeffs_bp[Nfilter1+1:end], F_fbvec_mod)
-    push!(F_fbvec, 0.5*F_fb_lp + 1*F_fb_bp + 0.5*F_fb_hp)
+    push!(F_fbvec, 0.0*F_fb_lp + 1*F_fb_bp + 0.0*F_fb_hp)
 
     shift_push!(u_buffer_lp, F_fb_lp)
     shift_push!(u_buffer_bp, F_fb_bp)
@@ -158,6 +158,25 @@ prob= SDEProblem(moments_evolution, moments_infogain, u0, tspan, p)
 pmeans = plot(sol.t, sol[1,:], label = L"\langle x \rangle", xlabel = "t [μs]", ylabel = "Nondimensional")
 plot!(sol.t, sol[2,:], label = L"\langle p \rangle")
 plot!(measuring_times, F_fbvec , label = "Filter", xlabel = "t [μs]", ylabel = "Nondimensional",xlims = (10,13))
+
+
+
+function energy(sol)
+    return 1/2 * (sol[1,:].^2 + sol[2,:].^2)
+end
+
+Es = energy(sol)
+Es_ratio1 = Es / (3/2)
+
+es = plot!(sol.t[2:end], Es_ratio1[1,2:end], label = L"E_1")
+plot!(sol.t[2:end], Es_ratio1[2,2:end], label = L"E_2")
+plot!(sol.t[2:end], Es_ratio1[3,2:end], label = L"E_3", yscale = :log10, xlabel = "t [μs]", ylabel = "Energy ratio", dpi = 500)
+
+
+
+
+
+
 
 # using FFTW
 # Fforce = fftshift(fft(F_fbvec[2:end]))
