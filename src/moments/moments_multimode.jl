@@ -1,4 +1,5 @@
-# Script for time evolution of the moments and covariances (SDE system) including 3 modes.TODO: Add appropriate initial conditions
+# Script for time evolution of the moments and covariances (SDE system) including 3 modes.
+# Note: X and Y are the slowly-varying operators of x and p
 using DifferentialEquations, Plots, LaTeXStrings, ProgressLogging
 
 # Function to obtain O_k index of matrix (in a row or column)
@@ -68,7 +69,7 @@ Qs  = [1e7, 1e3, 1e3]
 # Constants
 ħ = 1.05457182e-34 * 1e9^2 / 1e6 # esta en nm i μs! 
 kB = 1.380649e-23 * 1e9^2 / 1e6^2
-T = 0#1e-3
+T = 300#1e-3
 const nth = 1/(exp(ħ*ωm/(kB*T))-1)
 
 
