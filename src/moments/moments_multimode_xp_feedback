@@ -12,22 +12,22 @@ colmaj(row, col) = @. row + (col-1)*6
 δ(x,y) = ==(x,y)
 
 function shift_push!(meas_xs, new)
-    popfirst!(meas_xs)
-    push!(meas_xs, new)
+    pop!(meas_xs)
+    pushfirst!(meas_xs, new)
 end
 
-function apply_filter(meas_xs, coeffs)
-    sum(meas_xs.*coeffs)
-end
 
 function apply_iir_filter(meas_xs, meas_filtered,coeffs_num, coeffs_den)
-    1/coeffs_den[1] * sum(coeffs_num.*meas_xs) - sum(coeffs_den.*meas_filtered)
+    sum_zeros = sum(coeffs_num.*meas_xs)
+    sum_poles = sum(coeffs_den[2:end].*meas_filtered)
+    1/coeffs_den[1] * (sum_zeros - sum_poles)
 end
+
 
 # Time evolution w/o information gain. TODO If too many allocations: try with staticarray / add Mi, Nj etc as parameters and mutate
 function moments_evolution_3modes(du, u, p, t)
     # Parameters
-    @views γ0, ωm, ωs, Γba ,Γmeas, tsamp, meas_buffer, _, _, _, _, _, _ = p
+    @views γ0, ω, ωs, Γba, Γmeas, tsamp, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _ = p
     # x, p, C
     xs = @view u[1:2:5]
     ps = @view u[2:2:6]
@@ -39,7 +39,7 @@ function moments_evolution_3modes(du, u, p, t)
 
     #First moments
     @. dxs = -γ0/2*xs + ωs*ps
-    @. dps = -γ0/2*ps - ωs*xs -  F_fbvec_low[end] - F_fbvec_high[end] #F_fbvec_low[end] - F_fbvec_band[end] - F_fbvec_high[end]
+    @. dps = -γ0/2*ps - ωs*xs - F_fbvec[end] #F_fbvec_low[end] - F_fbvec_band[end] - F_fbvec_high[end]
     
     # Covariance matrix
     for M = 1:2, N = 1:2
@@ -67,15 +67,25 @@ function infogain_3modes(du,u,p,t)
 end
 
 
+
+
 function affect!(int)
-    shift_push!(int.p[7], sum(int.u[1:2:5]))
-    F_fb_low =      apply_filter(int.p[7][int.p[11]], int.p[9])
-    F_fb_high =     apply_filter(int.p[7][int.p[11]], int.p[9])
-    # F_fb_band =     apply_filter(int.p[7][int.p[13]], int.p[10])
-    push!(int.p[14], F_fb_low)
-    push!(int.p[15], F_fb_high)
-    # push!(int.p[16], F_fb_band)
+    _, _, _, _, _, _, meas_buffer, Nfilterlp, Nfilterbp, Nfilterhp, coeffs_lp, coeffs_hp, coeffs_bp, F_fbvec, Ndelay_lp, Ndelay_bp, Ndelay_hp, u_buffer_lp, u_buffer_bp, u_buffer_hp, modulated_meas_buffer, u_buffer_bp_mod, F_fbvec_mod = int.p
+
+    shift_push!(meas_buffer, sum(int.u[1:2:5]))
+
+    F_fb_lp = apply_iir_filter(meas_buffer[1+Ndelay_lp:Ndelay_lp+Nfilterlp], u_buffer_lp[1:Nfilterlp-1],coeffs_lp[1:Nfilterlp], coeffs_lp[Nfilterlp+1:end])
+    F_fb_bp = apply_iir_filter(meas_buffer[1+Ndelay_bp:Ndelay_bp+Nfilterbp], u_buffer_bp[1:Nfilterbp-1],coeffs_bp[1:Nfilterbp], coeffs_bp[Nfilterbp+1:end])
+    F_fb_hp = apply_iir_filter(meas_buffer[1+Ndelay_hp:Ndelay_hp+Nfilterhp], u_buffer_hp[1:Nfilterhp-1], coeffs_hp[1:Nfilterhp], coeffs_hp[Nfilterhp+1:end])
+    
+    # F_fb_bp = bandpass_demodulating(modulated_meas_buffer[1+Ndelay_bp:Ndelay_bp+Nfilter1], u_buffer_bp_mod[1:Nfilter1-1], ωmid*(int.t-tau), coeffs_bp[1:Nfilter1], coeffs_bp[Nfilter1+1:end], F_fbvec_mod)
+    push!(F_fbvec, 0.5*F_fb_lp + 1*F_fb_bp + 0.5*F_fb_hp)
+
+    shift_push!(u_buffer_lp, F_fb_lp)
+    shift_push!(u_buffer_bp, F_fb_bp)
+    shift_push!(u_buffer_hp, F_fb_hp)
 end
+
 
 # System parameters
 begin
@@ -109,66 +119,61 @@ begin
     Γmeas_vec = Γqba*η
 end
 
-# Parameters for the filter
 begin
     fsamp = 125 # Sampling frequency, MHz
     tsamp = 1/fsamp # μs
 
-    period_low = 2π / ωs[3] 
-    period_4_low = period_low/4
+    period = 1 / 0.5
+    periodlp_4 = period/4
 
-    period_high = 2π / ωs[2]
-    period_4_high = period_high/4
+    period = 1 / 1.1
+    periodbp_4 = period/4
 
-    period_band = 2π / ωs[1]
-    period_4_band = period_band/4
+    period = 1 / 1.5
+    periodhp_4 = period/4
+end
 
-# Filter parameters (for low and high pass)
+# Filter parameters
+begin
+    Nfilterlp = 6+1
+    Nfilterbp = 8+1
+    Nfilterhp = 10+1
 
-    N_filter = 30+1
-    N_band =   85+1
+    Ndelay_hp = ceil(Int, fsamp*(0.11))
+    Ndelay_bp = ceil(Int, fsamp*(0.66))
+    Ndelay_lp = ceil(Int, fsamp*(periodlp_4 + 0.48))
 
-    Nfix_low =  ceil(Int, 0.85 / tsamp)
-    Nfix_high = ceil(Int, 0.21 / tsamp)
-    Nfix_band = ceil(Int, 0.1  / tsamp)
-
-    NT4_low = ceil(Int,  period_4_low  / tsamp)
-    NT4_high = ceil(Int, period_4_high / tsamp)
-    NT4_band = ceil(Int, period_4_band / tsamp)
-
-    N_buffer_low = (N_filter  +  NT4_low  + Nfix_low)
-    N_buffer_high = (N_filter +  NT4_high + Nfix_high)
-    N_buffer_band = (N_band   + NT4_band  + Nfix_band)
-    N_buffer = max(N_buffer_high, N_buffer_low)
-    N_buffer = N_buffer_high
+    N_buffer = 200
     meas_buffer = zeros(N_buffer)
-
-    range_low = 1:N_filter
-    range_high = 1+Nfix_high: N_filter + Nfix_high
-    range_band = 1+Nfix_band: N_band + Nfix_band
-
     # Reading .dat files containing filter coefficients
-    coeffs_lp = vec(readdlm("lowpass_rectangular.dat"))
-    coeffs_hp = vec(readdlm("highpass_rectangular.dat"))
-    coeffs_bp = vec(readdlm("bandpass_rectangular.dat"))
-    F_fbvec_low = [0.0]
-    F_fbvec_high = [0.0]
-    F_fbvec_band = [0.0]
+    coeffs_lp = vec(readdlm("filter_coeffs/lowpass_iir_6.dat"))
+    coeffs_bp = vec(readdlm("filter_coeffs/bandpass_iir_8.dat"))
+    # coeffs_hp = vec(readdlm("filter_coeffs/highpass_iir_6.dat"))
+    coeffs_hp = vec(readdlm("filter_coeffs/bandpass_iir_10_alt.dat"))
+    # coeffs_bp = vec(readdlm("filter_coeffs/lowpass_iir_4_pelbandpass.dat"))
+
+    F_fbvec = Float64[]
+    F_fbvec_mod = Float64[]
+    ubuffer_hp = zeros(N_buffer-1)
+    ubuffer_bp = zeros(N_buffer-1)
+    ubuffer_lp = zeros(N_buffer-1)
+
+    modulated_meas_buffer = zeros(N_buffer)
+    u_buffer_bp_mod = zeros(N_buffer-1)
 end
 
 # Initial conditions and SDE parameters 
-p = (γ0, ωm, ωs, Γba_vec ,Γmeas_vec, tsamp, meas_buffer, coeffs_lp, coeffs_hp, coeffs_bp, range_low, range_high, range_band, F_fbvec_low, F_fbvec_high, F_fbvec_band)
-# p = (γ0, ωm, ωs, Γba_vec ,Γmeas_vec, tsamp, meas_buffer, coeffs_lp, coeffs_hp, range_low, range_high, F_fbvec_lo)
+p = (γ0, ωm, ωs, Γba_vec, Γmeas_vec, tsamp, meas_buffer, Nfilterlp, Nfilterbp, Nfilterhp, coeffs_lp, coeffs_hp, coeffs_bp, F_fbvec, Ndelay_lp, Ndelay_bp, Ndelay_hp, ubuffer_lp, ubuffer_bp, ubuffer_hp, modulated_meas_buffer, u_buffer_bp_mod, F_fbvec_mod,)
 
 begin
     Vx_th = nth + 0.5;
     C0 = [i == j ? Vx_th : 0.0 for i in 1:6, j in 1:6];
     u0 = vcat(zeros(6), vec(C0));
 end
+
 tspan = (0.0, 50) # μs
 
 measuring_times = collect(0:tsamp:tspan[2])
-measuring_times = measuring_times[3000:end]
 cb = PresetTimeCallback(measuring_times, affect!)
 
 prob= SDEProblem(moments_evolution_3modes, infogain_3modes, u0, tspan, p)
@@ -183,10 +188,10 @@ prob= SDEProblem(moments_evolution_3modes, infogain_3modes, u0, tspan, p)
     callback = cb
 );
 
-using FFTW
-Fforce = fftshift(fft(F_fbvec_high[2:end]))
-freqsforce = fftshift(fftfreq(length(measuring_times), fsamp))
-plot!(freqsforce, abs.(Fforce), xlims = (-2.5,2.5))
+# using FFTW
+# Fforce = fftshift(fft(F_fbvec_high[2:end]))
+# freqsforce = fftshift(fftfreq(length(measuring_times), fsamp))
+# plot!(freqsforce, abs.(Fforce), xlims = (-2.5,2.5))
 
 
 # Data visualization

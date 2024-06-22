@@ -31,12 +31,12 @@ function affect!(int)
     shift_push!(meas_buffer, int.u[1])
     # shift_push!(modulated_meas_buffer, int.u[1]*sin(ωmid*int.t))
 
-    F_fb_lp = 0*apply_iir_filter(meas_buffer[1+Ndelay_lp:Ndelay_lp+Nfilterlp], u_buffer_lp[1:Nfilterlp-1],coeffs_lp[1:Nfilterlp], coeffs_lp[Nfilterlp+1:end])
-    F_fb_bp = 1*apply_iir_filter(meas_buffer[1+Ndelay_bp:Ndelay_bp+Nfilterbp], u_buffer_bp[1:Nfilterbp-1],coeffs_bp[1:Nfilterbp], coeffs_bp[Nfilterbp+1:end])
-    F_fb_hp = 1*apply_iir_filter(meas_buffer[1+Ndelay_hp:Ndelay_hp+Nfilterhp], u_buffer_hp[1:Nfilterhp-1], coeffs_hp[1:Nfilterhp], coeffs_hp[Nfilterhp+1:end])
+    F_fb_lp = apply_iir_filter(meas_buffer[1+Ndelay_lp:Ndelay_lp+Nfilterlp], u_buffer_lp[1:Nfilterlp-1],coeffs_lp[1:Nfilterlp], coeffs_lp[Nfilterlp+1:end])
+    F_fb_bp = apply_iir_filter(meas_buffer[1+Ndelay_bp:Ndelay_bp+Nfilterbp], u_buffer_bp[1:Nfilterbp-1],coeffs_bp[1:Nfilterbp], coeffs_bp[Nfilterbp+1:end])
+    F_fb_hp = apply_iir_filter(meas_buffer[1+Ndelay_hp:Ndelay_hp+Nfilterhp], u_buffer_hp[1:Nfilterhp-1], coeffs_hp[1:Nfilterhp], coeffs_hp[Nfilterhp+1:end])
     
     # F_fb_bp = bandpass_demodulating(modulated_meas_buffer[1+Ndelay_bp:Ndelay_bp+Nfilter1], u_buffer_bp_mod[1:Nfilter1-1], ωmid*(int.t-tau), coeffs_bp[1:Nfilter1], coeffs_bp[Nfilter1+1:end], F_fbvec_mod)
-    push!(F_fbvec, F_fb_lp + F_fb_bp + F_fb_hp)
+    push!(F_fbvec, 0.5*F_fb_lp + 1*F_fb_bp + 0.5*F_fb_hp)
 
     shift_push!(u_buffer_lp, F_fb_lp)
     shift_push!(u_buffer_bp, F_fb_bp)
@@ -67,7 +67,7 @@ end
 
 # Parameters
 begin
-    ω = 2π*1.1# [ω] = MHz
+    ω = 2π*1.5# [ω] = MHz
     const ωmid = ω
     Q = 1e8
     γ0 = ω / Q
