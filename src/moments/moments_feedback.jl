@@ -1,9 +1,9 @@
 # Script for time evolution of the moments and variances (SDE system) with feedback
-using DifferentialEquations, StaticArrays, Plots, LaTeXStrings, ProgressLogging, DelimitedFiles
+using DifferentialEquations, StaticArrays, Plots, LaTeXStrings, ProgressLogging, DelimitedFiles, LsqFit
 
 # Moments time evolution (deterministic part) with feedback term in Hamiltonian: H_fb(t) = -G⋅⟨x(t-T/4)⟩x(t)
 function moments_evolution(u,p,t)
-    @views γ0, ω, μ, η, _, _, _, _, _, _, _, _, F_fbvec, _, _, _, _, _, _, _, _, _ = p
+    @views γ0, ω, μ, η, _, _, _, _, _, _, _, _, F_fbvec, _, _, _, _, _, _, _, _, _,_ = p
 
     @views x, p, Vx, Vp, Cxp = u
 
@@ -26,17 +26,15 @@ end
 
 function affect!(int)
     # F_fb = apply_filter(int.p[6][1:int.p[7]], int.p[8])
-    _, _, _, _, _, meas_buffer, Nfilterlp, Nfilterbp, Nfilterhp, coeffs_lp, coeffs_hp, coeffs_bp, F_fbvec, Ndelay_lp, Ndelay_bp, Ndelay_hp, u_buffer_lp, u_buffer_bp, u_buffer_hp, modulated_meas_buffer, u_buffer_bp_mod, F_fbvec_mod = int.p
+    _, _, _, _, _, meas_buffer, Nfilterlp, Nfilterbp, Nfilterhp, coeffs_lp, coeffs_hp, coeffs_bp, F_fbvec, Ndelay_lp, Ndelay_bp, Ndelay_hp, u_buffer_lp, u_buffer_bp, u_buffer_hp, modulated_meas_buffer, u_buffer_bp_mod, F_fbvec_mod, gain = int.p
 
     shift_push!(meas_buffer, int.u[1])
-    # shift_push!(modulated_meas_buffer, int.u[1]*sin(ωmid*int.t))
 
     F_fb_lp = apply_iir_filter(meas_buffer[1+Ndelay_lp:Ndelay_lp+Nfilterlp], u_buffer_lp[1:Nfilterlp-1],coeffs_lp[1:Nfilterlp], coeffs_lp[Nfilterlp+1:end])
     F_fb_bp = apply_iir_filter(meas_buffer[1+Ndelay_bp:Ndelay_bp+Nfilterbp], u_buffer_bp[1:Nfilterbp-1],coeffs_bp[1:Nfilterbp], coeffs_bp[Nfilterbp+1:end])
     F_fb_hp = apply_iir_filter(meas_buffer[1+Ndelay_hp:Ndelay_hp+Nfilterhp], u_buffer_hp[1:Nfilterhp-1], coeffs_hp[1:Nfilterhp], coeffs_hp[Nfilterhp+1:end])
     
-    # F_fb_bp = bandpass_demodulating(modulated_meas_buffer[1+Ndelay_bp:Ndelay_bp+Nfilter1], u_buffer_bp_mod[1:Nfilter1-1], ωmid*(int.t-tau), coeffs_bp[1:Nfilter1], coeffs_bp[Nfilter1+1:end], F_fbvec_mod)
-    push!(F_fbvec, 0.0*F_fb_lp + 1*F_fb_bp + 0.0*F_fb_hp)
+    push!(F_fbvec, 0.0*F_fb_lp + gain*F_fb_bp + 0.0*F_fb_hp)
 
     shift_push!(u_buffer_lp, F_fb_lp)
     shift_push!(u_buffer_bp, F_fb_bp)
@@ -48,26 +46,22 @@ function shift_push!(meas_xs, new)
     pushfirst!(meas_xs, new)
 end
 
-function apply_fir_filter(meas_xs, coeffs)
-    sum(meas_xs.*coeffs)
-end
-
 function apply_iir_filter(meas_xs, meas_filtered,coeffs_num, coeffs_den)
     sum_zeros = sum(coeffs_num.*meas_xs)
     sum_poles = sum(coeffs_den[2:end].*meas_filtered)
     1/coeffs_den[1] * (sum_zeros - sum_poles)
 end
 
-function bandpass_demodulating(signal_modulated, f_fb_modulatedbuffer, ωt, coeffs_num, coeffs_den, F_fbvec_mod)
-    F_fb_modulated = apply_iir_filter(signal_modulated, f_fb_modulatedbuffer, coeffs_num, coeffs_den)
-    shift_push!(f_fb_modulatedbuffer, F_fb_modulated)
-    push!(F_fbvec_mod, F_fb_modulated)
-    return F_fb_modulated #* sin(ωt)
+function energy(sol)
+    return 1/2 * (sol[1,:].^2 + sol[2,:].^2)
 end
+
+using LsqFit
+@. model(x,p) = p[1] * x + p[2]
 
 # Parameters
 begin
-    ω = 2π*1.5# [ω] = MHz
+    ω = 2π*1.1# [ω] = MHz
     const ωmid = ω
     Q = 1e8
     γ0 = ω / Q
@@ -102,7 +96,6 @@ begin
     period = 1 / 1.5
     periodhp_4 = period/4
 end
-
 # Filter parameters
 begin
     Nfilterlp = 6+1
@@ -132,51 +125,105 @@ begin
     u_buffer_bp_mod = zeros(N_buffer-1)
 end
 
+# gains = collect(0.1:0.1:1.3)
+gain = 0.4
+cooldown_rates = Float64[]
+# Es_ratio = zeros(length(1), length(0:tsamp:100))
+# for i in eachindex(gains) 
+    # @show gain = gains[i]
+    F_fbvec = Float64[]
+    F_fbvec_mod = Float64[]
+    ubuffer_hp = zeros(N_buffer-1)
+    ubuffer_bp = zeros(N_buffer-1)
+    ubuffer_lp = zeros(N_buffer-1)
+    # Initial conditions and SDE parameters
+    p = (γ0, ω, μ, η, tsamp, meas_buffer, Nfilterlp, Nfilterbp, Nfilterhp, coeffs_lp, coeffs_hp, coeffs_bp, F_fbvec, Ndelay_lp, Ndelay_bp, Ndelay_hp, ubuffer_lp, ubuffer_bp, ubuffer_hp, modulated_meas_buffer, u_buffer_bp_mod, F_fbvec_mod,gain)
+    u0 = [0, 0, Vx_th, Vp_th, 0.0]
+    tspan = (0.0, 500) # μs
 
+    measuring_times = collect(0:tsamp:tspan[2])
+    cb = PresetTimeCallback(measuring_times, affect!, save_positions = (false, false))
+    # Simulation
 
-tau = 0.0
-# Initial conditions and SDE parameters
-p = (γ0, ω, μ, η, tsamp, meas_buffer, Nfilterlp, Nfilterbp, Nfilterhp, coeffs_lp, coeffs_hp, coeffs_bp, F_fbvec, Ndelay_lp, Ndelay_bp, Ndelay_hp, ubuffer_lp, ubuffer_bp, ubuffer_hp, modulated_meas_buffer, u_buffer_bp_mod, F_fbvec_mod,)
-u0 = [0, 0, Vx_th, Vp_th, 0.0]
-tspan = (0.0, 100) # μs
+    # f = SDEFunction(moments_evolution, moments_infogain, syms = [:x, :p])
+    prob= SDEProblem(moments_evolution, moments_infogain, u0, tspan, p)
+    # prob = SDEProblem(f, u0, tspan, p)
+    @time sol = solve(prob,
+        SOSRI(),
+        saveat = tsamp,
+        dtmin = 1e-16,
+        dtmax = tsamp,
+        dt = 1e-15,
+        maxiters = tspan[2]*1e7,
+        progress = true,
+        callback = cb,
+        save_idxs = 1:2
+    );
 
-measuring_times = collect(0:tsamp:tspan[2])
-cb = PresetTimeCallback(measuring_times, affect!, save_positions = (false, false))
-# Simulation
-prob= SDEProblem(moments_evolution, moments_infogain, u0, tspan, p)
-@time sol = solve(prob,
-    SOSRI(),
-    saveat = tsamp,
-    dtmin = 1e-16,
-    dtmax = tsamp,
-    dt = 1e-15,
-    maxiters = tspan[2]*1e7,
-    progress = true,
-    callback = cb
-);
+    df = DataFrame(sol)
+    using CSV
+    CSV.write("1mode.csv", df)
 
-pmeans = plot(sol.t, sol[1,:], label = L"\langle x \rangle", xlabel = "t [μs]", ylabel = "Nondimensional")
-plot!(sol.t, sol[2,:], label = L"\langle p \rangle")
-plot!(measuring_times, F_fbvec , label = "Filter", xlabel = "t [μs]", ylabel = "Nondimensional",xlims = (10,13))
+    pmeans = plot(sol.t, sol[1,:], label = L"\langle x \rangle", xlabel = "t [μs]", ylabel = L"X/x_{zpf}" *" (unitless)")
+    plot!(sol.t, sol[2,:], label = L"\langle p \rangle")
+    # plot!(measuring_times, F_fbvec , label = "Filter", xlabel = "t [μs]", ylabel = "Nondimensional",xlims = (10,13))
 
+    i = 1
+    Es_ratio = energy(sol) / (3/2)
 
-
-function energy(sol)
-    return 1/2 * (sol[1,:].^2 + sol[2,:].^2)
+    es = plot(sol.t[2:end], log10.(Es_ratio[2:end]), 
+        label = "$gain",
+         ylabel = "Energy ratio (unitless, logarithmic)", 
+         xlabel = "t [μs]", 
+         dpi = 600,
+        #  yticks = 5,
+         size = (600,350)
+    )
+    display(es)
 end
 
-Es = energy(sol)
-Es_ratio1 = Es / (3/2)
+plot()
+for i in eachindex(gains[2:12])
+es = plot!(sol.t[2:end], log10.(Es_ratio[i,2:end]), 
+label = "$(gains[i])",
+ ylabel = "Energy ratio (unitless, logarithmic)", 
+ xlabel = "t [μs]", 
+ dpi = 600,
+#  yticks = 5,
+ size = (600,350),
+ palette = :twelvebitrainbow
+)
+end
+es
 
-es = plot!(sol.t[2:end], Es_ratio1[1,2:end], label = L"E_1")
-plot!(sol.t[2:end], Es_ratio1[2,2:end], label = L"E_2")
-plot!(sol.t[2:end], Es_ratio1[3,2:end], label = L"E_3", yscale = :log10, xlabel = "t [μs]", ylabel = "Energy ratio", dpi = 500)
+i = 13
+es = plot(sol.t[2:end], log10.(Es_ratio[i,2:end]), 
+label = "$(gains[i])",
+ ylabel = "Energy ratio (unitless, logarithmic)", 
+ xlabel = "t [μs]", 
+ dpi = 600,
+#  yticks = 5,
+ size = (600,350)
+)
 
 
+fit13 = curve_fit(model, sol.t[200:9000], log10.(Es_ratio[i,200:9000]), [-10, 250.0])
+plot!(sol.t[2:end], coef(fit13)[1].*sol.t[2:end] .+ coef(fit13)[2], label = "")
 
 
+push!(cooldown_rates, coef(fit13)[1])
 
 
+plot(gains, cooldown_rates,
+    legend = false,
+    xlabel = "Gain (unitless)",
+    ylabel = "Cooldown rate [log"*L"_{10}"*"(MHz)]", 
+    dpi = 600, 
+    lt = :scatter,
+    ms = 5,
+    msw = 0,
+    color = :2,
+    size = (550,350))
 
 # using FFTW
 # Fforce = fftshift(fft(F_fbvec[2:end]))
@@ -187,3 +234,4 @@ plot!(sol.t[2:end], Es_ratio1[3,2:end], label = L"E_3", yscale = :log10, xlabel 
 
 # pvars = scatter(sol.t, sol[,:], label = L"V_x", xlabel = "t [μs]", ylabel = "Nondimensional")
 # plot!(sol.t, sol[3,:], label = L"V_p")
+

@@ -64,7 +64,7 @@ Qs  = [1e7, 1e3, 1e3]
 # Constants
 ħ = 1.05457182e-34 * 1e9^2 / 1e6 # esta en nm i μs! 
 kB = 1.380649e-23 * 1e9^2 / 1e6^2
-T = 0#1e-3
+T = 300
 const nth = 1/(exp(ħ*ωm/(kB*T))-1)
 
 
@@ -91,23 +91,23 @@ Vx_th = nth + 0.5
 C0 = [i == j ? Vx_th : 0.0 for i in 1:6, j in 1:6]
 u0 = vcat(zeros(6), vec(C0))
 
-tspan = (0.0, 1000) # μs
+tspan = (0.0, 100) # μs
 
 prob= SDEProblem(moments_evolution_3modes, infogain_3modes, u0, tspan, p)
 @time sol = solve(prob,
     SOSRI(),
-    saveat = 0.1/ωm,
-    dt = 1e-3,
-    dtmax = 1e-1,
-    # dtmin = 1e-6,
+    saveat = 1/10,
+    dt = 1e-14,
+    dtmax = 1/10,
+    dtmin = 1e-16,
     maxiters = tspan[2]*1e7,
     progress = true,
 );
 
 # Data visualization
 
-pvars = plot(sol.t, sol[1,:], label = L"\langle x_1 \rangle", xlabel = "t [μs]", ylabel = "Nondimensional")
-plot!(sol.t[:], sol[2,:], label = L"\langle p_1 \rangle")
+pvars = plot(sol.t, sol[1,:], label = L"\langle x_1 \rangle", xlabel = "t [μs]", ylabel = L"X/x_{zpf}"*" (unitless)")
+plot!(sol.t[:], sol[2,:], label = L"\langle p_1 \rangle", dpi = 600)
 plot!(sol.t[:], sol[3,:], label = L"\langle x_2 \rangle")
 plot!(sol.t[:], sol[4,:], label = L"\langle p_2 \rangle")
 plot!(sol.t[:], sol[5,:], label = L"\langle x_3 \rangle")
@@ -160,11 +160,11 @@ F = fftshift(fft(Q[1,:]))
 F2 = fftshift(fft(Q[3,:]))
 F3 = fftshift(fft(Q[5,:]))
 Fangle = fftshift(fft(i_signal))
-freqs = fftshift(fftfreq(length(0:0.1/ωm:tspan[2])+1, fs))
+freqs = fftshift(fftfreq(length(0:1/10:tspan[2]), 1/10))
 
 
 df = 10
-plot_angle = plot!(freqs[1:df:end], abs.(Fangle[1:df:end]), yscale = :log10, xlims = (-5, 5), xlabel = L"ω"*" [MHz]", label = L"arg(S_{out})", alpha = 1, dpi = 700, ylabel = "Fourier Transform, logarithmic (1/Hz)")
+plot_angle = plot(freqs[1:df:end], abs.(Fangle[1:df:end]), yscale = :log10, xlims = (-5, 5), xlabel = L"ω"*" [MHz]", label = L"arg(S_{out})", alpha = 1, dpi = 700, ylabel = "Fourier Transform, logarithmic (1/Hz)")
 
 plot(freqs[1:df:end], abs.(F[1:df:end]), xlims = (-5,5), yscale = :log10, label = L"\mathcal{F}(x_1)", xlabel = "ω", alpha = 0.7)
 plot!(freqs[1:df:end], abs.(F2[1:df:end]), yscale = :log10, label = L"\mathcal{F}(x_2)", alpha = 0.7)

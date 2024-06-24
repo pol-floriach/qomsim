@@ -12,7 +12,7 @@ end
 # Parameters 
 m = 1e-12   # [m] = kg
 ω = 2π*1.1  # [ω] = MHz
-Q = 1e7
+Q = 1e8
 γ0 = ω / Q  # [γ0] = MHz
 
 
@@ -21,8 +21,8 @@ Q = 1e7
 const ħ = 1.05457182e-34 * 1e9^2 / 1e6    # [ħ] = kg⋅nm^2⋅μs^-1
 const kB = 1.380649e-23 * 1e9^2 / 1e6^2   # [kB] = kg⋅nm^2⋅μs^-2
 
-η = 0.8
-T = 1e2
+η = 0.9
+T = 300
 
 
 nth = 1/(exp(ħ*ω/(kB*T))-1)
@@ -31,7 +31,7 @@ xzp = sqrt(ħ/(2*m*ω))/1e9               # [x_zp] = m
 # Steady state / initial condition for continuation starting at k̄ = 0
 Vx_th = Vp_th = nth + 0.5                # Unitless
 # Initializing vectors
-kvec = collect(0:1e-1:10)
+kvec = collect(0:1e-1:1e4)
 steady_values = zeros(length(kvec), 3)
 snrvec = zeros(length(kvec))
 u0_newt = SA[Vx_th, Vp_th, 0.0]
@@ -50,26 +50,29 @@ for ii in eachindex(kvec)
     snrvec[ii] = abs(ss[1] - ss[2])*2*η*kvec[ii]
 end
 
+# steady_values0 = steady_values
+# steady_values30 = steady_values
+steady_values300 = steady_values
 # Plot of Variances
-vars = hline([0.5], label = L"\frac{1}{2}")
-plot!(kvec, steady_values[:,1], 
-    label = L"V_x",
-    xlabel = L"\tilde k", 
+i = 3
+vars = hline([0.5], label = L"V_{x}^{zpf}", color = :black)
+plot!(kvec/2, steady_values300[:,1], 
+    label = L"V_x, T = 300\; K",
+    xlabel = L"\mu", 
     ylabel = "Variances (nondimensional)",
-    lt = :scatter,
-    ms = 1.5,
-    msw = 0,
-    ma = 0.5,
+    ls = :solid,
+    alpha = 0.7,
+    color = i,
+    yscale = :log10
 )
-plot!(kvec, steady_values[:,2],
-    label = L"V_p",
-    lt = :scatter,
-    ms = 1.5,
-    msw = 0,
-    ma = 0.5,
-    ylims = (0,2)
+
+plot!(kvec/2, steady_values300[:,2],
+    label = L"V_p, T = 300 \;K",
+    ls = :dash,
+    alpha = 0.7,
+    color = i,
+    # yscale = :log10
 )
-#vline!([4*xzp^2/γ0])
 
 # Product of variances (nondimensional) vs heisenberg unc. lower bound
 product = plot(kvec[2:end], steady_values[2:end,1].*steady_values[2:end,2], label = L"V_x\cdot V_p",ylabel = "Product of variances",ylims = (0,1))
@@ -100,10 +103,11 @@ display(total)
 # Finding out what the measurement rate is!
 
 g0 = 2π*465
-ncav = 1e5
+ncav = 1e7
 g = g0*sqrt(ncav)
 κ = 2π*45e6
 Γqba = 4*g^2/κ /1e6# [Γqba] = MHz
+
 
 Sxximp = 1/(2*Γqba)* xzp^2
 
@@ -111,11 +115,13 @@ Sxximp = 1/(2*Γqba)* xzp^2
 ħ2 = 1.05e-34
 
 # Checking out the laser power needed to have a specifc measurement rate
+ncav = 1e7
 P = ncav * ħ2 * ωl * (κ/2)^2 / κ
 
 
 kvec2 = 0:1e-8:1e-6
-SN = [1/(η*k*1e6)*xzp^2 for k in kvec2]
+kvec2 = 0:0.1:10
+SN = [1/(η*k*1e6)*xzp^2 for k in kvec2/2]
 Sxx = 8*(nth+0.5)*xzp^2/(γ0*1e6)
 Sxx_gs = 4*xzp^2/(γ0*1e6)
 

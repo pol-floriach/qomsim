@@ -39,7 +39,7 @@ function moments_evolution_3modes(du, u, p, t)
 
     #First moments
     @. dxs = -γ0/2*xs + ωs*ps
-    @. dps = -γ0/2*ps - ωs*xs - F_fbvec[end] #F_fbvec_low[end] - F_fbvec_band[end] - F_fbvec_high[end]
+    @. dps = -γ0/2*ps - ωs*xs - F_fbvec[end] 
     
     # Covariance matrix
     for M = 1:2, N = 1:2
@@ -67,8 +67,6 @@ function infogain_3modes(du,u,p,t)
 end
 
 
-
-
 function affect!(int)
     _, _, _, _, _, _, meas_buffer, Nfilterlp, Nfilterbp, Nfilterhp, coeffs_lp, coeffs_hp, coeffs_bp, F_fbvec, Ndelay_lp, Ndelay_bp, Ndelay_hp, u_buffer_lp, u_buffer_bp, u_buffer_hp, modulated_meas_buffer, u_buffer_bp_mod, F_fbvec_mod = int.p
 
@@ -79,7 +77,7 @@ function affect!(int)
     F_fb_hp = apply_iir_filter(meas_buffer[1+Ndelay_hp:Ndelay_hp+Nfilterhp], u_buffer_hp[1:Nfilterhp-1], coeffs_hp[1:Nfilterhp], coeffs_hp[Nfilterhp+1:end])
     
     # F_fb_bp = bandpass_demodulating(modulated_meas_buffer[1+Ndelay_bp:Ndelay_bp+Nfilter1], u_buffer_bp_mod[1:Nfilter1-1], ωmid*(int.t-tau), coeffs_bp[1:Nfilter1], coeffs_bp[Nfilter1+1:end], F_fbvec_mod)
-    push!(F_fbvec, 0.5*F_fb_lp + 1.5*F_fb_bp + 0.5*F_fb_hp)
+    push!(F_fbvec, 0.5*F_fb_lp + 0.4*F_fb_bp + 0.5*F_fb_hp)
 
     shift_push!(u_buffer_lp, F_fb_lp)
     shift_push!(u_buffer_bp, F_fb_bp)
@@ -154,9 +152,7 @@ begin
     # Reading .dat files containing filter coefficients
     coeffs_lp = vec(readdlm("filter_coeffs/lowpass_iir_6.dat"))
     coeffs_bp = vec(readdlm("filter_coeffs/bandpass_iir_8.dat"))
-    # coeffs_hp = vec(readdlm("filter_coeffs/highpass_iir_6.dat"))
     coeffs_hp = vec(readdlm("filter_coeffs/bandpass_iir_10_alt.dat"))
-    # coeffs_bp = vec(readdlm("filter_coeffs/lowpass_iir_4_pelbandpass.dat"))
 
     F_fbvec = Float64[]
     F_fbvec_mod = Float64[]
@@ -177,7 +173,7 @@ begin
     u0 = vcat(zeros(6), vec(C0));
 end
 
-tspan = (0.0, 200) # μs
+tspan = (0.0, 300) # μs
 
 measuring_times = collect(0:tsamp:tspan[2])
 cb = PresetTimeCallback(measuring_times, affect!)
@@ -194,11 +190,11 @@ prob= SDEProblem(moments_evolution_3modes, infogain_3modes, u0, tspan, p)
     callback = cb
 );
 
-# using FFTW
-# Fforce = fftshift(fft(F_fbvec_high[2:end]))
-# freqsforce = fftshift(fftfreq(length(measuring_times), fsamp))
-# plot!(freqsforce, abs.(Fforce), xlims = (-2.5,2.5))
+using DataFrames, CSV
+df = DataFrame(sol)
+rename!(df, [:timestep, :xmain, :pmain, :xlow, :plow, :xhigh, :phigh])
 
+CSV.write("3modes_gain_04.csv", df)
 
 # Data visualization
 
@@ -228,10 +224,22 @@ plot!(sol.t[:], sol[5,:], label = L"\langle x_3 \rangle")
 Es = energy(sol)
 Es_ratio1 = Es / (3/2)
 
-es = plot!(sol.t[2:end], Es_ratio1[1,2:end], label = L"E_1")
-plot!(sol.t[2:end], Es_ratio1[2,2:end], label = L"E_2")
-plot!(sol.t[2:end], Es_ratio1[3,2:end], label = L"E_3", yscale = :log10, xlabel = "t [μs]", ylabel = "Energy ratio", dpi = 500)
+stopplot = 35000
+es = plot(sol.t[2:stopplot], Es_ratio1[1,2:stopplot], label = L"E_{main}")
+plot!(sol.t[2:stopplot], Es_ratio1[2,2:stopplot], label = L"E_{low}")
+plot!(sol.t[2:stopplot], Es_ratio1[3,2:stopplot], label = L"E_{high}", yscale = :log10, xlabel = "t [μs]", ylabel = "Energy ratio (unitless)", dpi = 500, size = (600, 350))
 
+
+using LsqFit
+@. model(x,p) = p[1] * x + p[2]
+
+fit13 = curve_fit(model, sol.t[2:15000], log10.(Es_ratio1[1,2:15000]), [-10, 250.0])
+
+es = plot(sol.t[2:stopplot], log10.(Es_ratio1[1,2:stopplot]), label = L"E_{main}")
+plot!(sol.t[2:stopplot], log10.(Es_ratio1[2,2:stopplot]), label = L"E_{low}")
+plot!(sol.t[2:stopplot], log10.(Es_ratio1[3,2:stopplot]), label = L"E_{high}", xlabel = "t [μs]", ylabel = "Energy ratio (unitless, logarithmic)", dpi = 500, size = (600, 350))
+
+plot!(sol.t[2:stopplot], coef(fit13)[1].*sol.t[2:stopplot] .+ coef(fit13)[2], label = "")
 
 
 
